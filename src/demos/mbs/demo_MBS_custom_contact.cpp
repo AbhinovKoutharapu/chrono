@@ -81,10 +81,15 @@ class CustomContact : public ChCollisionSystem::NarrowphaseCallback,  // interce
 
     // Clear the list of cached collisions.
     // Must be called at each step, before integration.
-    void Reset() { collisions.clear(); }
+    void Reset() { 
+        collisions_left.clear(); 
+        collisions_right.clear();
+    }
 
     // Get the number of cached collisions at the current step.
-    size_t GetNumCollisions() const { return collisions.size(); }
+    size_t GetNumCollisions_left_sphere() const { return collisions_left.size();}
+
+    size_t GetNumCollisions_left_sphere() const {return collisions_left.size();}
 
     // Implement NarrowphaseCallback interface.
     // This function is called during collision detection for each identified pair of collision points.
@@ -93,12 +98,11 @@ class CustomContact : public ChCollisionSystem::NarrowphaseCallback,  // interce
         if ((body1.get() == cinfo.modelA->GetContactable() && body2.get() == cinfo.modelB->GetContactable()) ||
             (body1.get() == cinfo.modelB->GetContactable() && body2.get() == cinfo.modelA->GetContactable())) {
             if (cinfo.distance < 0) {
-                if (left_sphere_ptr == cinfo.shapeA || right_sphere_ptr == cinfo.shapeB) {
-                    
+                if (left_sphere_ptr == cinfo.shapeA || left_sphere_ptr == cinfo.shapeB) {
+                    collisions_left.push_back(cinfo);
                 } else {
-                
-                } 
-                collisions.push_back(cinfo);
+                    collisions_right.push_back(cinfo);
+                }
             }
             return false;
         }
@@ -109,7 +113,7 @@ class CustomContact : public ChCollisionSystem::NarrowphaseCallback,  // interce
     // Implement CustomCollisionCallback interface
     virtual void OnCustomCollision(ChSystem* sys) override {
         // Process current list of collisions between the tagged bodies
-        if (collisions.empty())
+        if (collisions_left.empty() || collisions_right.empty())
             return;
 
         // Generate contacts between tagged bodies:
@@ -118,55 +122,62 @@ class CustomContact : public ChCollisionSystem::NarrowphaseCallback,  // interce
         switch (method) {
             case Method::ADD_ALL_CONTACTS: {
                 // Add a contact for each detected collision pair
-                for (const auto& collision : collisions)
+                for (const auto& collision : collisions_left)
                     sys->GetContactContainer()->AddContact(collision);
 
+                for (const auto& collision : collisions_right)
+                    sys->GetContactContainer()->AddContact(collision);
                 break;
             }
 
             case Method::ADD_AVERAGE_CONTACT: {
                 // Get contact materials
-                auto matA = collisions[0].shapeA->GetMaterial();
-                auto matB = collisions[0].shapeB->GetMaterial();
+                auto calculate_average_contact = [&](const std::vector<ChCollisionInfo>& collisions) {
+                    if (collisions.empty())
+                        return;
+                    auto matA = collisions[0].shapeA->GetMaterial();
+                    auto matB = collisions[0].shapeB->GetMaterial();
 
-                // Calculate one equivalent collision (average everything)
-                auto num_collisions = collisions.size();
+                    // Calculate one equivalent collision (average everything)
+                    auto num_collisions = collisions.size();
 
-                ChCollisionInfo cinfo_avg;
-                cinfo_avg.modelA = collisions[0].modelA;
-                cinfo_avg.modelB = collisions[0].modelB;
-                cinfo_avg.shapeA = nullptr;
-                cinfo_avg.shapeB = nullptr;
+                    ChCollisionInfo cinfo_avg;
+                    cinfo_avg.modelA = collisions[0].modelA;
+                    cinfo_avg.modelB = collisions[0].modelB;
+                    cinfo_avg.shapeA = nullptr;
+                    cinfo_avg.shapeB = nullptr;
 
-                cinfo_avg.vpA = VNULL;
-                cinfo_avg.vpB = VNULL;
-                cinfo_avg.vN = VNULL;
-                cinfo_avg.distance = 0;
+                    cinfo_avg.vpA = VNULL;
+                    cinfo_avg.vpB = VNULL;
+                    cinfo_avg.vN = VNULL;
+                    cinfo_avg.distance = 0;
 
-                for (const auto& cinfo : collisions) {
-                    assert(cinfo.distance < 0);
+                    for (const auto& cinfo : collisions) {
+                        assert(cinfo.distance < 0);
 
-                    if (body1.get() == cinfo.modelA->GetContactable()) {
-                        cinfo_avg.vpA += cinfo.vpA;
-                        cinfo_avg.vpB += cinfo.vpB;
-                        cinfo_avg.vN += cinfo.vN;
-                    } else {
-                        cinfo_avg.vpA += cinfo.vpB;
-                        cinfo_avg.vpB += cinfo.vpA;
-                        cinfo_avg.vN -= cinfo.vN;
+                        if (body1.get() == cinfo.modelA->GetContactable()) {
+                            cinfo_avg.vpA += cinfo.vpA;
+                            cinfo_avg.vpB += cinfo.vpB;
+                            cinfo_avg.vN += cinfo.vN;
+                        } else {
+                            cinfo_avg.vpA += cinfo.vpB;
+                            cinfo_avg.vpB += cinfo.vpA;
+                            cinfo_avg.vN -= cinfo.vN;
+                        }
+                        cinfo_avg.distance += cinfo.distance;
                     }
-                    cinfo_avg.distance += cinfo.distance;
-                }
 
-                cinfo_avg.distance /= num_collisions;
-                cinfo_avg.vpA /= num_collisions;
-                cinfo_avg.vpB /= num_collisions;
-                cinfo_avg.vN /= num_collisions;
-                cinfo_avg.vN.Normalize();
+                    cinfo_avg.distance /= num_collisions;
+                    cinfo_avg.vpA /= num_collisions;
+                    cinfo_avg.vpB /= num_collisions;
+                    cinfo_avg.vN /= num_collisions;
+                    cinfo_avg.vN.Normalize();
 
-                // Add a single equivalent contact
-                sys->GetContactContainer()->AddContact(cinfo_avg, matA, matB);
-
+                    // Add a single equivalent contact
+                    sys->GetContactContainer()->AddContact(cinfo_avg, matA, matB);
+                };
+                calculate_average_contact(collisions_left);
+                calculate_average_contact(collisions_right);
                 break;
             }
         }
