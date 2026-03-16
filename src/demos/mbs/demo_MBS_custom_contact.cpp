@@ -71,7 +71,13 @@ class CustomContact : public ChCollisionSystem::NarrowphaseCallback,  // interce
     enum class Method { ADD_ALL_CONTACTS, ADD_AVERAGE_CONTACT, ADD_CONTACT_LOADS };
 
     CustomContact(std::shared_ptr<ChBody> body1, std::shared_ptr<ChBody> body2, Method method)
-        : body1(body1), body2(body2), method(method) {}
+        : body1(body1), body2(body2), method(method) {
+        auto body1_model = body1->GetCollisionModel();
+        const auto& shapes_list = body1_model->GetShapeInstances();
+
+        left_sphere_ptr = shapes_list[0].shape.get();
+        right_sphere_ptr = shapes_list[1].shape.get();
+    }
 
     // Clear the list of cached collisions.
     // Must be called at each step, before integration.
@@ -87,6 +93,11 @@ class CustomContact : public ChCollisionSystem::NarrowphaseCallback,  // interce
         if ((body1.get() == cinfo.modelA->GetContactable() && body2.get() == cinfo.modelB->GetContactable()) ||
             (body1.get() == cinfo.modelB->GetContactable() && body2.get() == cinfo.modelA->GetContactable())) {
             if (cinfo.distance < 0) {
+                if (left_sphere_ptr == cinfo.shapeA || right_sphere_ptr == cinfo.shapeB) {
+                    
+                } else {
+                
+                } 
                 collisions.push_back(cinfo);
             }
             return false;
@@ -242,7 +253,10 @@ class CustomContact : public ChCollisionSystem::NarrowphaseCallback,  // interce
     Method method;
     std::shared_ptr<ChBody> body1;
     std::shared_ptr<ChBody> body2;
-    std::vector<ChCollisionInfo> collisions;
+    std::vector<ChCollisionInfo> collisions_left;
+    std::vector<ChCollisionInfo> collisions_right;
+    ChCollisionShape* left_sphere_ptr;
+    ChCollisionShape* right_sphere_ptr;
 };
 
 // -----------------------------------------------------------------------------
