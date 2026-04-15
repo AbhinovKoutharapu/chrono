@@ -121,3 +121,10 @@ mark_as_advanced(FORCE BUILD_BENCHMARKING_FSI_TDPF)
 if(BUILD_BENCHMARKING_FSI_TDPF)
     add_subdirectory(fsi/tdpf)
 endif()
+
+# Add benchmark tests for the geometry module
+option(BUILD_BENCHMARKING_GEOMETRY "Build benchmark tests for geometry module" TRUE)
+mark_as_advanced(FORCE BUILD_BENCHMARKING_GEOMETRY)
+if(BUILD_BENCHMARKING_GEOMETRY)
+    add_subdirectory(geometry)
+endif()
