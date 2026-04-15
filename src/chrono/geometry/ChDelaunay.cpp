@@ -12,11 +12,39 @@
 // Authors: Abhinov Koutharapu
 // =============================================================================
 
-#include "chrono/geometry/ChDelaunay3D.h"
+#include "chrono/geometry/ChDelaunay.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace chrono {
+namespace {
+
+bool VecLess(const ChVector3d& lhs, const ChVector3d& rhs) {
+    if (lhs.x() != rhs.x())
+        return lhs.x() < rhs.x();
+    if (lhs.y() != rhs.y())
+        return lhs.y() < rhs.y();
+    return lhs.z() < rhs.z();
+}
+
+bool SameTetrahedron(const ChDelaunayTetrahedron& lhs, const ChDelaunayTetrahedron& rhs) {
+    std::array<ChVector3d, 4> l = {lhs.a, lhs.b, lhs.c, lhs.d};
+    std::array<ChVector3d, 4> r = {rhs.a, rhs.b, rhs.c, rhs.d};
+    std::sort(l.begin(), l.end(), VecLess);
+    std::sort(r.begin(), r.end(), VecLess);
+    return l == r;
+}
+
+double SignedVolume6(const ChVector3d& a, const ChVector3d& b, const ChVector3d& c, const ChVector3d& d) {
+    return (b - a).Cross(c - a).Dot(d - a);
+}
+
+bool IsDegenerate(const ChDelaunayTetrahedron& t, double eps = 1e-12) {
+    return std::abs(SignedVolume6(t.a, t.b, t.c, t.d)) < eps;
+}
+
+}  // namespace
 
 bool ChDelaunayFace::operator==(const ChDelaunayFace& other) const {
     // Check all combinations to see if the faces share the exact same 3 vertices
@@ -52,7 +80,9 @@ bool ChDelaunayTetrahedron::CircumsphereContains(const ChVector3d& pt) const {
     double radius_squared = center_offset.Length2();
     double distance_squared = (pt - circumcenter).Length2();
 
-    return distance_squared <= radius_squared;
+    // Use a small tolerance to avoid unstable cavity construction on points
+    // lying numerically on the circumsphere boundary.
+    return distance_squared <= radius_squared + 1e-12;
 }
 
 bool ChDelaunayTetrahedron::SharesVertexWith(const ChDelaunayTetrahedron& other) const {
@@ -95,10 +125,10 @@ std::vector<ChDelaunayTetrahedron> ChDelaunay3D::CreateTetrahedralization(const 
     double midZ = (minZ + maxZ) / 2.0;
 
     // Setup the encompassing tetrahedron 
-    ChVector3d p1(midX, midY + 5 * deltaMax, midZ);
-    ChVector3d p2(midX - 5 * deltaMax, midY - 5 * deltaMax, midZ - 5 * deltaMax);
-    ChVector3d p3(midX + 5 * deltaMax, midY - 5 * deltaMax, midZ - 5 * deltaMax);
-    ChVector3d p4(midX, midY - 5 * deltaMax, midZ + 5 * deltaMax);
+    ChVector3d p1(midX, midY + 10 * deltaMax, midZ);
+    ChVector3d p2(midX - 10 * deltaMax, midY - 10 * deltaMax, midZ - 10 * deltaMax);
+    ChVector3d p3(midX + 10 * deltaMax, midY - 10 * deltaMax, midZ - 10 * deltaMax);
+    ChVector3d p4(midX, midY - 10 * deltaMax, midZ + 10 * deltaMax);
 
     ChDelaunayTetrahedron superTetrahedra = {p1, p2, p3, p4};
     tetrahedra.push_back(superTetrahedra);
@@ -148,7 +178,7 @@ std::vector<ChDelaunayTetrahedron> ChDelaunay3D::CreateTetrahedralization(const 
         tetrahedra.erase(std::remove_if(tetrahedra.begin(), tetrahedra.end(),
                                         [&badTetrahedra](const ChDelaunayTetrahedron& t) {
                                             for (const auto& bt : badTetrahedra) {
-                                                if (t.a == bt.a && t.b == bt.b && t.c == bt.c && t.d == bt.d)
+                                                if (SameTetrahedron(t, bt))
                                                     return true;
                                             }
                                             return false;
@@ -157,7 +187,9 @@ std::vector<ChDelaunayTetrahedron> ChDelaunay3D::CreateTetrahedralization(const 
 
         // Connect the new point to the cavity's boundary faces to form new tetrahedra
         for (const auto& face : cavityFaces) {
-            tetrahedra.push_back({face.p1, face.p2, face.p3, pt});
+            ChDelaunayTetrahedron candidate{face.p1, face.p2, face.p3, pt};
+            if (!IsDegenerate(candidate))
+                tetrahedra.push_back(candidate);
         }
     }
 
@@ -168,7 +200,22 @@ std::vector<ChDelaunayTetrahedron> ChDelaunay3D::CreateTetrahedralization(const 
         }),  
     tetrahedra.end());
 
-    return tetrahedra;
+    // Remove duplicates that can appear from numerical boundary cases.
+    std::vector<ChDelaunayTetrahedron> unique_tets;
+    unique_tets.reserve(tetrahedra.size());
+    for (const auto& t : tetrahedra) {
+        bool duplicate = false;
+        for (const auto& ut : unique_tets) {
+            if (SameTetrahedron(t, ut)) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (!duplicate)
+            unique_tets.push_back(t);
+    }
+
+    return unique_tets;
 }
 
 

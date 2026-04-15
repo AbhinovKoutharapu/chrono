@@ -518,6 +518,7 @@ set(Chrono_geometry_SOURCES
     geometry/ChCone.cpp
     geometry/ChCylinder.cpp
     geometry/ChCapsule.cpp
+    geometry/ChDelaunay.cpp
     geometry/ChLine.cpp
     geometry/ChLineArc.cpp
     geometry/ChLineSegment.cpp
@@ -546,6 +547,7 @@ set(Chrono_geometry_HEADERS
     geometry/ChCone.h
     geometry/ChCylinder.h
     geometry/ChCapsule.h
+    geometry/ChDelaunay.h
     geometry/ChLine.h
     geometry/ChLineCam.h
     geometry/ChLinePoly.h
@@ -1690,3 +1692,4 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/chrono_thirdparty/rapidxml
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/chrono_thirdparty/yaml-cpp
         DESTINATION include/chrono_thirdparty
         FILES_MATCHING PATTERN "*.h" PATTERN "*.cuh" PATTERN "*.hpp" PATTERN "*.inl")
+
