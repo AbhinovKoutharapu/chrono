@@ -42,7 +42,7 @@ static void BM_Delaunay3D(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * state.range(0));
 }
 
-// Register tests: starting from 100 points up to 10,000
-BENCHMARK(BM_Delaunay3D)->RangeMultiplier(10)->Range(10, 10000)->Unit(benchmark::kMillisecond);
+// Register tests: starting from 50 points up to 5,00
+BENCHMARK(BM_Delaunay3D)->RangeMultiplier(10)->Range(50, 5000)->Unit(benchmark::kMillisecond);
 
 BENCHMARK_MAIN();
